@@ -10,7 +10,7 @@ appsettings.Development.json
 .env.*
 !.env.example
 
-# Build results
+# Build результаты
 [Dd]ebug/
 [Dd]ebugPublic/
 [Rr]elease/
