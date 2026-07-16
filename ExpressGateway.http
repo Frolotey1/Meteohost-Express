@@ -1,0 +1,6 @@
+@ExpressGateway_HostAddress = http://localhost:5127
+
+GET {{ExpressGateway_HostAddress}}/weatherforecast/
+Accept: application/json
+
+###
