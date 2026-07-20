@@ -37,8 +37,25 @@ public class ApiKeyMiddleware
             return;
         }
 
-        var expectedKey = _configuration["ApiKey"];
-        if (string.IsNullOrEmpty(expectedKey) || !expectedKey.Equals(apiKey))
+        var expectedKey = _configuration["ExpressSettings:ApiKey"];
+        
+        if (string.IsNullOrEmpty(expectedKey))
+        {
+            _logger.LogError("API key not configured in ExpressSettings");
+            context.Response.StatusCode = 500;
+            await context.Response.WriteAsJsonAsync(new
+            {
+                error = "Server configuration error",
+                errorCode = "API_KEY_NOT_CONFIGURED",
+                timestamp = DateTime.UtcNow
+            });
+            return;
+        }
+
+        _logger.LogDebug("Expected key: {ExpectedKey}", expectedKey);
+        _logger.LogDebug("Provided key: {ProvidedKey}", apiKey.ToString());
+
+        if (!expectedKey.Equals(apiKey.ToString()))
         {
             _logger.LogWarning("Invalid API key for: {Path}", path);
             context.Response.StatusCode = 401;
@@ -59,7 +76,6 @@ public class ApiKeyMiddleware
         return path.StartsWith("/swagger") ||
                path.StartsWith("/health") ||
                path == "/" ||
-               path.StartsWith("/info") ||
-               path.StartsWith("/api/webhook");
+               path.StartsWith("/info");
     }
 }

@@ -63,66 +63,6 @@ public class MessengerController : ControllerBase
         }
     }
 
-    [HttpPost("webhook")]
-    public async Task<IActionResult> SetWebhook([FromBody] WebhookRequest request)
-    {
-        try
-        {
-            var result = await _expressService.SetWebhookAsync(request);
-            return Ok(result);
-        }
-        catch (Exception ex)
-        {
-            _logger.LogError(ex, "Error setting webhook");
-            return StatusCode(500, new { error = ex.Message });
-        }
-    }
-
-    [HttpGet("webhook")]
-    public async Task<IActionResult> GetWebhook()
-    {
-        try
-        {
-            var result = await _expressService.GetWebhookAsync();
-            return Ok(result);
-        }
-        catch (Exception ex)
-        {
-            _logger.LogError(ex, "Error getting webhook");
-            return StatusCode(500, new { error = ex.Message });
-        }
-    }
-
-    [HttpDelete("webhook")]
-    public async Task<IActionResult> DeleteWebhook()
-    {
-        try
-        {
-            var result = await _expressService.DeleteWebhookAsync();
-            return Ok(new { success = result, message = result ? "Webhook deleted" : "Failed to delete webhook" });
-        }
-        catch (Exception ex)
-        {
-            _logger.LogError(ex, "Error deleting webhook");
-            return StatusCode(500, new { error = ex.Message });
-        }
-    }
-
-    [HttpPost("webhook/event")]
-    public async Task<IActionResult> ProcessWebhookEvent([FromBody] WebhookEvent eventData)
-    {
-        try
-        {
-            var result = await _expressService.ProcessWebhookEventAsync(eventData);
-            return Ok(new { success = result, message = result ? "Event processed" : "Failed to process event" });
-        }
-        catch (Exception ex)
-        {
-            _logger.LogError(ex, "Error processing webhook event");
-            return StatusCode(500, new { error = ex.Message });
-        }
-    }
-
     [HttpGet("ping")]
     public async Task<IActionResult> Ping()
     {

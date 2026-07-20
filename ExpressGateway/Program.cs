@@ -118,7 +118,6 @@ if (app.Environment.IsDevelopment())
                 <p><span class='method'>POST</span> <span class='endpoint'>/api/Messenger/send</span> - Отправить сообщение в чат</p>
                 <p><span class='method'>POST</span> <span class='endpoint'>/api/Messenger/send-default</span> - Отправить сообщение в группу по умолчанию</p>
                 <p><span class='method'>GET</span> <span class='endpoint'>/api/Messenger/chats</span> - Получить список чатов</p>
-                <p><span class='method'>POST</span> <span class='endpoint'>/api/Messenger/webhook</span> - Настроить вебхук</p>
                 <p><span class='method'>GET</span> <span class='endpoint'>/api/Messenger/ping</span> - Проверка доступности API</p>
                 <p><span class='method'>GET</span> <span class='endpoint'>/health</span> - Health check сервиса</p>
             </div>
@@ -157,7 +156,6 @@ if (app.Environment.IsDevelopment())
             <div class='highlight'>
                 <p><code>EXPRESS_API_URL</code> - URL для вызовов к Express API</p>
                 <p><code>EXPRESS_API_KEY</code> - API ключ для аутентификации</p>
-                <p><code>WEBHOOK_SECRET</code> - Секрет для вебхуков</p>
                 <p><code>PORT</code> - Порт сервера (по умолчанию 3000)</p>
             </div>
         </div>

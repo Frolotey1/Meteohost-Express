@@ -15,8 +15,6 @@ public class ExpressService : IExpressService
     private readonly HttpClient _httpClient;
     private readonly string _apiBaseUrl;
     private readonly string _apiKey;
-    private string? _currentWebhookUrl;
-    private string? _currentWebhookSecret;
 
     public ExpressService(
         IConfiguration configuration, 
@@ -40,7 +38,6 @@ public class ExpressService : IExpressService
         _httpClient.BaseAddress = new Uri(_apiBaseUrl);
         
         LoadChats();
-        LoadWebhookConfig();
     }
 
     private void LoadChats()
@@ -78,12 +75,6 @@ public class ExpressService : IExpressService
         }
     }
 
-    private void LoadWebhookConfig()
-    {
-        _currentWebhookUrl = _configuration["ExpressSettings:WebhookUrl"];
-        _currentWebhookSecret = _configuration["ExpressSettings:WebhookSecret"];
-    }
-
     public async Task<SendMessageResponse> SendMessageAsync(string chatId, string message, string? asset = null)
     {
         try
@@ -93,17 +84,93 @@ public class ExpressService : IExpressService
             var botId = _configuration["ExpressSettings:BotId"]
                 ?? throw new Exception("BotId not configured");
 
-            var messenger = new ExpressMessenger(chatId, botId);
-            var result = messenger.Send(asset ?? "", message);
+            var payload = new
+            {
+                chatId = chatId,
+                text = message,
+                botId = botId,
+                asset = asset ?? ""
+            };
+
+            var jsonPayload = JsonSerializer.Serialize(payload);
+            _logger.LogInformation("Sending payload: {Payload}", jsonPayload);
+
+            var content = new StringContent(
+                jsonPayload,
+                System.Text.Encoding.UTF8,
+                "application/json"
+            );
+
+            var response = await _httpClient.PostAsync("/api/v4/messages", content);
+
+            var responseBody = await response.Content.ReadAsStringAsync();
+            _logger.LogInformation("Response Status: {StatusCode}", response.StatusCode);
+            _logger.LogInformation("Response Body: {ResponseBody}", responseBody ?? "[empty]");
+
+            if (response.IsSuccessStatusCode)
+            {
+                if (response.StatusCode == System.Net.HttpStatusCode.NoContent)
+                {
+                    return new SendMessageResponse
+                    {
+                        Success = true,
+                        ChatId = chatId,
+                        SentAt = DateTime.UtcNow,
+                        Status = "sent",
+                        MessageId = Guid.NewGuid().ToString(),
+                        ExpressResponse = "Message sent successfully (204 No Content)"
+                    };
+                }
+
+                if (!string.IsNullOrWhiteSpace(responseBody))
+                {
+                    try
+                    {
+                        var apiResponse = JsonSerializer.Deserialize<ExpressApiResponse>(responseBody, new JsonSerializerOptions
+                        {
+                            PropertyNameCaseInsensitive = true
+                        });
+
+                        return new SendMessageResponse
+                        {
+                            Success = true,
+                            ChatId = chatId,
+                            SentAt = DateTime.UtcNow,
+                            Status = "sent",
+                            MessageId = apiResponse?.MessageId ?? Guid.NewGuid().ToString(),
+                            ExpressResponse = responseBody
+                        };
+                    }
+                    catch (JsonException)
+                    {
+                        return new SendMessageResponse
+                        {
+                            Success = true,
+                            ChatId = chatId,
+                            SentAt = DateTime.UtcNow,
+                            Status = "sent",
+                            MessageId = Guid.NewGuid().ToString(),
+                            ExpressResponse = responseBody
+                        };
+                    }
+                }
+
+                return new SendMessageResponse
+                {
+                    Success = true,
+                    ChatId = chatId,
+                    SentAt = DateTime.UtcNow,
+                    Status = "sent",
+                    MessageId = Guid.NewGuid().ToString(),
+                    ExpressResponse = "Message sent successfully"
+                };
+            }
 
             return new SendMessageResponse
             {
-                Success = true,
-                ChatId = chatId,
-                SentAt = DateTime.UtcNow,
-                Status = "sent",
-                MessageId = Guid.NewGuid().ToString(),
-                ExpressResponse = result
+                Success = false,
+                Error = $"API Error: {response.StatusCode} - {responseBody}",
+                ChatId = chatId
             };
         }
         catch (Exception ex)
@@ -164,185 +231,6 @@ public class ExpressService : IExpressService
             Chats = chats,
             Total = _chatCache.Count
         };
-    }
-
-    public async Task<WebhookResponse> SetWebhookAsync(WebhookRequest request)
-    {
-        try
-        {
-            _logger.LogInformation("Setting webhook: {Url}", request.Url);
-
-            if (!Uri.IsWellFormedUriString(request.Url, UriKind.Absolute))
-            {
-                return new WebhookResponse
-                {
-                    Status = "error",
-                    Message = "Invalid URL format"
-                };
-            }
-
-            _currentWebhookUrl = request.Url;
-            _currentWebhookSecret = request.Secret;
-
-            var webhookPayload = new
-            {
-                url = request.Url,
-                secret = request.Secret,
-                events = new[] { "message", "chat", "user" }
-            };
-
-            var content = new StringContent(
-                JsonSerializer.Serialize(webhookPayload),
-                System.Text.Encoding.UTF8,
-                "application/json");
-
-            var response = await _httpClient.PostAsync("/api/webhook/set", content);
-
-            if (response.IsSuccessStatusCode)
-            {
-                var json = await response.Content.ReadAsStringAsync();
-                var result = JsonSerializer.Deserialize<WebhookResponse>(json, new JsonSerializerOptions
-                {
-                    PropertyNameCaseInsensitive = true
-                });
-
-                return result ?? new WebhookResponse
-                {
-                    Status = "ok",
-                    Message = "Webhook set successfully",
-                    WebhookUrl = request.Url
-                };
-            }
-
-            return new WebhookResponse
-            {
-                Status = "ok",
-                Message = "Webhook configured locally",
-                WebhookUrl = request.Url
-            };
-        }
-        catch (Exception ex)
-        {
-            _logger.LogError(ex, "Failed to set webhook");
-            return new WebhookResponse
-            {
-                Status = "error",
-                Message = $"Failed to set webhook: {ex.Message}"
-            };
-        }
-    }
-
-    public async Task<WebhookResponse> GetWebhookAsync()
-    {
-        try
-        {
-            var response = await _httpClient.GetAsync("/api/webhook/current");
-
-            if (response.IsSuccessStatusCode)
-            {
-                var json = await response.Content.ReadAsStringAsync();
-                var result = JsonSerializer.Deserialize<WebhookResponse>(json, new JsonSerializerOptions
-                {
-                    PropertyNameCaseInsensitive = true
-                });
-
-                if (result != null)
-                {
-                    return result;
-                }
-            }
-        }
-        catch (Exception ex)
-        {
-            _logger.LogWarning(ex, "Failed to get webhook from external API");
-        }
-
-        return new WebhookResponse
-        {
-            Status = _currentWebhookUrl != null ? "configured" : "not_configured",
-            WebhookUrl = _currentWebhookUrl!,
-            Message = _currentWebhookUrl != null ? "Webhook is configured" : "No webhook configured"
-        };
-    }
-
-    public async Task<bool> DeleteWebhookAsync()
-    {
-        try
-        {
-            var response = await _httpClient.DeleteAsync("/api/webhook/delete");
-
-            if (response.IsSuccessStatusCode)
-            {
-                _currentWebhookUrl = null;
-                _currentWebhookSecret = null;
-                return true;
-            }
-        }
-        catch (Exception ex)
-        {
-            _logger.LogError(ex, "Failed to delete webhook");
-        }
-
-        _currentWebhookUrl = null;
-        _currentWebhookSecret = null;
-        return true;
-    }
-
-    public async Task<bool> ProcessWebhookEventAsync(WebhookEvent eventData)
-    {
-        try
-        {
-            _logger.LogInformation("Processing webhook event: {EventType}", eventData.EventType);
-            _logger.LogDebug("Event data: {@EventData}", eventData);
-
-            if (string.IsNullOrEmpty(eventData.EventType))
-            {
-                _logger.LogWarning("Event type is empty");
-                return false;
-            }
-
-            switch (eventData.EventType?.ToLower())
-            {
-                case "message":
-                    _logger.LogInformation("Message event received: {MessageId}, ChatId: {ChatId}", 
-                        eventData.MessageId, eventData.ChatId);
-                    
-                    if (eventData.Message != null)
-                    {
-                        _logger.LogInformation("Message text: {Text}", eventData.Message.Text);
-                    }
-                    break;
-
-                case "chat":
-                    _logger.LogInformation("Chat event received: {ChatId}", eventData.ChatId);
-                    
-                    if (eventData.ChatInfo != null)
-                    {
-                        _logger.LogInformation("Chat name: {ChatName}", eventData.ChatInfo.Name);
-                    }
-                    break;
-
-                case "user":
-                    _logger.LogInformation("User event received: {UserId}", eventData.UserId);
-                    
-                    if (eventData.UserInfo != null)
-                    {
-                        _logger.LogInformation("User name: {UserName}", eventData.UserInfo.Name);
-                    }
-                    break;
-
-                default:
-                    _logger.LogWarning("Unknown webhook event type: {EventType}", eventData.EventType);
-                    return false;
-            }
-
-            return true;
-        }
-        catch (Exception ex)
-        {
-            _logger.LogError(ex, "Failed to process webhook event");
-            return false;
-        }
     }
 
     public async Task<PingResponse> PingAsync()
