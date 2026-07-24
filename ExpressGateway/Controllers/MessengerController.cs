@@ -48,21 +48,6 @@ public class MessengerController : ControllerBase
         }
     }
 
-    [HttpGet("chats")]
-    public async Task<IActionResult> GetChats([FromQuery] int limit = 50, [FromQuery] int offset = 0)
-    {
-        try
-        {
-            var result = await _expressService.GetChatsAsync(limit, offset);
-            return Ok(result);
-        }
-        catch (Exception ex)
-        {
-            _logger.LogError(ex, "Error getting chats");
-            return StatusCode(500, new { error = ex.Message });
-        }
-    }
-
     [HttpGet("ping")]
     public async Task<IActionResult> Ping()
     {
